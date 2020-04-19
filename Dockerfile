@@ -16,19 +16,28 @@ RUN     apk add --no-cache --virtual .build-deps \
         tar -C /src -vxzf /src/dante.tar.gz && \
         cd /src/dante-$DANTE_VER && \
         # https://lists.alpinelinux.org/alpine-devel/3932.html
-        ac_cv_func_sched_setscheduler=no ./configure && \
+        ac_cv_func_sched_setscheduler=no ./configure --without-krb5 --without-ldap --without-upnp --with-pam && \
         make -j install && \
         cd / && rm -r /src && \
-        apk del .build-deps && \
         apk add --no-cache \
             linux-pam
-        
-COPY    sockd.conf /etc/
 
-COPY    docker-entrypoint.sh /
+RUN \
+  mkdir /pam && \
+  cd pam && \
+  curl -sSL https://github.com/prapdm/libpam-pwdfile/archive/v1.0.tar.gz | tar xz --strip 1 && \
+  make install && \
+  cd .. && \
+  rm -rvf pam && \
+  apk del .build-deps && \
+  rm -rvf /var/cache/apk/* && \
+  rm -rvf /tmp/* && \
+  rm -rvf /src  && \
+  rm -rvf /var/log/*
+
+RUN     echo "auth required pam_pwdfile.so pwdfile /sockd.passwd" > /etc/pam.d/sockd
+RUN     echo "account required pam_permit.so" >> /etc/pam.d/sockd
 
 EXPOSE  1080
-
-ENTRYPOINT  ["/docker-entrypoint.sh"]
 
 CMD     ["sockd"]
